@@ -1,0 +1,65 @@
+#!/bin/sh
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep ".php\{0,1\}$")
+
+if [ "$STAGED_FILES" = "" ]; then
+  exit 0
+fi
+
+PASS=true
+PROJECT_NAME=${PWD##*/}
+
+# --------- PHPCS ---------
+echo "\nValidating PHPCS for \033[44;37m ${PROJECT_NAME} \033[0m\n"
+
+# Check for phpcs
+which ./vendor/bin/phpcs &> /dev/null
+if [ "$?" -eq 1 ]; then
+  echo "\t\033[41mPlease install PHPCS\033[0m"
+  exit 1
+fi
+
+RULESET=./phpcs.xml
+
+for FILE in $STAGED_FILES
+do
+  ./vendor/bin/phpcs --colors --standard="$RULESET" "$FILE"
+
+  if [ "$?" -eq 0 ]; then
+    echo "\n>> \033[32mPHPCS Passed: $FILE\033[0m"
+  else
+    echo "\n>> \033[41mPHPCS Failed: $FILE\033[0m"
+    PASS=false
+  fi
+done
+
+echo "\nPHPCS validation completed!\n"
+
+echo "--------------------------------"
+
+# --------- PHPUnit Test ---------
+echo "\nPHPUnit Testing for \033[44;37m ${PROJECT_NAME} \033[0m\n"
+
+# Check for phpunit
+which ./vendor/bin/phpunit &> /dev/null
+if [ "$?" -eq 1 ]; then
+  echo "\t\033[41mPlease install PHPUnit\033[0m"
+  exit 1
+fi
+
+./vendor/bin/phpunit --testdox
+if [ "$?" -eq 0 ]; then
+    echo "\n>> \033[32mPHPUnit Testing Passed.\033[0m"
+else
+    echo "\n>> \033[41mPHPUnit Testing Failed.\033[0m"
+    PASS=false
+fi
+
+if ! $PASS; then
+  echo "\n\033[41mCOMMIT FAILED:\033[0m\nYour commit contains files that should pass PHPCS & PHPUnit but do not. Please fix the errors and try again. Aborting commit.\n"
+  exit 1
+else
+  echo "\n\033[42mCOMMIT SUCCEEDED\033[0m\n"
+fi
+
+exit $?
